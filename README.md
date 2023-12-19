@@ -1,4 +1,4 @@
-# Documentação do Código: Controle de Recursos
+# Documentação
 
 ## Introdução
 
