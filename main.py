@@ -1,14 +1,16 @@
-#By: Cristiano Verissimo
-#Year: 2023
-#GitHub: https://github.com/CristianoVerissimo
+# By: Cristiano Verissimo
+# Year: 2023
+# GitHub: https://github.com/CristianoVerissimo
 
-#pip install auto-py-to-exe --> python3 -m auto_py_to_exe
+# pip install auto-py-to-exe --> python3 -m auto_py_to_exe
 
 import tkinter as tk
 from tkinter import ttk
 import sqlite3
 import locale
-from tkcalendar import DateEntry
+from datetime import datetime
+from matplotlib.figure import Figure
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 class ControleRecursos:
     def __init__(self, root):
@@ -23,10 +25,9 @@ class ControleRecursos:
         self.criar_tabela()
 
         # Variáveis de controle
-        self.descricao_var = tk.StringVar()
-        self.tipo_var = tk.StringVar(value="Entrada")
+        self.tipo_var = tk.StringVar(value="Demais Despesas")
         self.valor_var = tk.DoubleVar()
-        self.data_var = tk.StringVar()
+        self.data_var = tk.StringVar(value=datetime.now().strftime("%d/%m/%Y"))
 
         # Interface gráfica
         ttk.Style().theme_use("clam")
@@ -37,7 +38,6 @@ class ControleRecursos:
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS transacoes (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                descricao TEXT,
                 tipo TEXT,
                 valor REAL,
                 data TEXT
@@ -46,22 +46,35 @@ class ControleRecursos:
         self.conexao.commit()
 
     def adicionar_transacao(self):
-        descricao = self.descricao_var.get()
         tipo = self.tipo_var.get()
         valor = self.valor_var.get()
         data = self.data_var.get()
 
-        if descricao and tipo and valor and data:
+        if tipo and valor:
             if tipo == "Saída":
                 valor *= -1
 
             cursor = self.conexao.cursor()
-            cursor.execute("INSERT INTO transacoes (descricao, tipo, valor, data) VALUES (?, ?, ?, ?)",
-                           (descricao, tipo, valor, data))
+            cursor.execute("INSERT INTO transacoes (tipo, valor, data) VALUES (?, ?, ?)",
+                           (tipo, valor, data))
             self.conexao.commit()
             self.atualizar_lista_transacoes()
             self.atualizar_total_recursos()
             self.limpar_campos()
+            self.atualizar_grafico()
+
+    def excluir_transacao(self):
+        item_selecionado = self.lista_transacoes.selection()
+        if item_selecionado:
+            transacao_id = self.lista_transacoes.item(item_selecionado)["values"][0]
+
+            cursor = self.conexao.cursor()
+            cursor.execute("DELETE FROM transacoes WHERE id = ?", (transacao_id,))
+            self.conexao.commit()
+
+            self.atualizar_lista_transacoes()
+            self.atualizar_total_recursos()
+            self.atualizar_grafico()
 
     def criar_interface(self):
         # Frames
@@ -72,32 +85,29 @@ class ControleRecursos:
         frame_lista.grid(row=0, column=1, sticky=(tk.W, tk.E, tk.N, tk.S))
 
         # Labels e Entradas
-        ttk.Label(frame_entrada, text="Descrição:").grid(row=0, column=0, sticky=tk.W)
-        entrada_descricao = ttk.Entry(frame_entrada, textvariable=self.descricao_var)
-        entrada_descricao.grid(row=0, column=1, sticky=(tk.W, tk.E))
+        ttk.Label(frame_entrada, text="Tipo:").grid(row=0, column=0, sticky=tk.W)
+        combo_tipo = ttk.Combobox(frame_entrada, textvariable=self.tipo_var, values=["Pensão", "Contas Mensais", "Cartão Ju", "Maquina Lavar", "Demais Despesas", "Poupança"])
+        combo_tipo.grid(row=0, column=1, sticky=(tk.W, tk.E))
 
-        ttk.Label(frame_entrada, text="Tipo:").grid(row=1, column=0, sticky=tk.W)
-        combo_tipo = ttk.Combobox(frame_entrada, textvariable=self.tipo_var, values=["Entrada", "Saída"])
-        combo_tipo.grid(row=1, column=1, sticky=(tk.W, tk.E))
-
-        ttk.Label(frame_entrada, text="Valor (R$):").grid(row=2, column=0, sticky=tk.W)
+        ttk.Label(frame_entrada, text="Valor (R$):").grid(row=1, column=0, sticky=tk.W)
         entrada_valor = ttk.Entry(frame_entrada, textvariable=self.valor_var)
-        entrada_valor.grid(row=2, column=1, sticky=(tk.W, tk.E))
-
-        ttk.Label(frame_entrada, text="Data:").grid(row=3, column=0, sticky=tk.W)
-        self.calendario = DateEntry(frame_entrada, textvariable=self.data_var, date_pattern="dd/MM/yyyy", locale="pt_BR")
-        self.calendario.grid(row=3, column=1, sticky=(tk.W, tk.E))
+        entrada_valor.grid(row=1, column=1, sticky=(tk.W, tk.E))
 
         # Botão de Adicionar
         btn_adicionar = ttk.Button(frame_entrada, text="Adicionar", command=self.adicionar_transacao)
-        btn_adicionar.grid(row=4, column=1, sticky=tk.W)
+        btn_adicionar.grid(row=2, column=1, sticky=tk.W)
+
+        # Botão de Pago
+        btn_pago = ttk.Button(frame_entrada, text="Pago", command=self.excluir_transacao)
+        btn_pago.grid(row=2, column=2, sticky=tk.W)
 
         # Lista de Transações
-        self.lista_transacoes = ttk.Treeview(frame_lista, columns=("Descrição", "Tipo", "Valor", "Data"), show="headings")
-        self.lista_transacoes.heading("Descrição", text="Descrição")
+        self.lista_transacoes = ttk.Treeview(frame_lista, columns=("ID", "Tipo", "Valor", "Data"), show="headings")
+        self.lista_transacoes.heading("ID", text="ID")
         self.lista_transacoes.heading("Tipo", text="Tipo")
         self.lista_transacoes.heading("Valor", text="Valor")
         self.lista_transacoes.heading("Data", text="Data")
+        self.lista_transacoes.column("ID", width=30)  # Ajustar largura da coluna ID
         self.lista_transacoes.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
 
         # Adicionar tags para colorir os valores
@@ -115,6 +125,15 @@ class ControleRecursos:
         # Atualizar o total de recursos
         self.atualizar_total_recursos()
 
+        # Frame para o gráfico
+        frame_grafico = ttk.Frame(self.root, padding="10")
+        frame_grafico.grid(row=1, column=1, columnspan=2, sticky=(tk.W, tk.E, tk.N, tk.S))
+        self.figura = Figure(figsize=(5, 3), dpi=75)
+        self.ax = self.figura.add_subplot(111)
+        self.canvas = FigureCanvasTkAgg(self.figura, master=frame_grafico)
+        self.canvas.get_tk_widget().grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        self.atualizar_grafico()
+
     def atualizar_lista_transacoes(self):
         # Limpar a lista atual
         for item in self.lista_transacoes.get_children():
@@ -122,7 +141,7 @@ class ControleRecursos:
 
         # Preencher a lista com os dados do banco de dados
         cursor = self.conexao.cursor()
-        cursor.execute("SELECT descricao, tipo, valor, data FROM transacoes")
+        cursor.execute("SELECT id, tipo, valor, data FROM transacoes")
         transacoes = cursor.fetchall()
 
         for transacao in transacoes:
@@ -143,11 +162,21 @@ class ControleRecursos:
         self.label_total_recursos.config(text=locale.currency(total_recursos, grouping=True))
 
     def limpar_campos(self):
-        self.descricao_var.set("")
-        self.tipo_var.set("Entrada")
+        self.tipo_var.set("Demais Despesas")
         self.valor_var.set("")
-        self.data_var.set("")
 
+    def atualizar_grafico(self):
+        cursor = self.conexao.cursor()
+        cursor.execute("SELECT tipo, SUM(valor) FROM transacoes GROUP BY tipo")
+        dados = cursor.fetchall()
+
+        tipos = [dado[0] for dado in dados]
+        valores = [abs(dado[1]) for dado in dados]  # Utilizar valor absoluto para evitar valores negativos
+
+        self.ax.clear()
+        self.ax.pie(valores, labels=tipos, autopct='%1.1f%%', startangle=140)
+        self.ax.set_title("Distribuição das Despesas")
+        self.canvas.draw()
 
 if __name__ == "__main__":
     root = tk.Tk()
