@@ -14,7 +14,8 @@ O código implementa uma aplicação de Controle de Recursos utilizando a biblio
 Instale as bibliotecas necessárias com o seguinte comando:
 
 ```bash
-pip install tk tkcalendar
+pip install tk tkcalendar matplotlib
+sudo apt get install tkinter -y
 ```
 
 ## Funcionalidades
